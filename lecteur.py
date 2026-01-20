@@ -1,35 +1,84 @@
 import pygame
-import os
-from mutagen.mp3 import MP3
-from mutagen.id3 import ID3
 import time
-from explorateur import*
+from play_control import *
+
 chemin_base = input("Entrez le chemin d'accès de votre dossier de musiques : ")
 if chemin_base[-1] != "/":
     chemin_base += "/"
 base = Folder(chemin_base, None)
 
-def affiche(folder):
-    print("    "*folder.depth + folder.name)
-    if os.path.isdir(folder.path):
-        for i in folder.children:
-            affiche(i)
+def draw_explorer(folder, start_y=10):
+    click_zones.clear()
+    y=start_y
+
+    def draw_item(item, y):
+        indent = item.depth * 20
+
+        if isinstance(item, Folder):
+            if item.expanded:
+                prefixe = "[-]"
+            else:
+                prefixe="[+]"
+        else:
+            prefixe="   "
+
+        text = font.render(prefixe+" "+item.name, True, (230, 230, 230))
+        rect = text.get_rect(topleft=(10+indent, y))
+        screen.blit(text, rect)
+
+        click_zones.append((rect, item))
+        return y + 20
+
+    def walk(folder, y):
+        y = draw_item(folder, y)
+
+        if folder.expanded:
+            for child in folder.children:
+                if isinstance(child, Folder):
+                    y = walk(child, y)
+                else:
+                    y = draw_item(child, y)
+        return y
+
+    walk(folder, y)
+
+pygame.init()
+screen = pygame.display.set_mode((0, 0))
+font = pygame.font.Font(None, 24)
+
+click_zones = []
 
 
 
-def play_song(song):
-    audio = MP3(song.path, ID3=ID3) # Supprimer les commentaires invalides
-    if "COMM" in audio.tags: 
-        del audio.tags["COMM"]
-    audio.save()
+running = True
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            mx, my = event.pos
+
+            for rect, item in click_zones:
+                if rect.collidepoint(mx, my):
+
+                    if isinstance(item, Folder):
+                        item.expanded = not item.expanded
+                    elif isinstance(item, Song):
+                        item.play_song()
 
 
-    pygame.mixer.init()                 # Initialise le module audio
-    pygame.mixer.music.load(song.path)  # Charge ton fichier MP3
-    pygame.mixer.music.play()           # Lance la lecture
+    screen.fill((40, 40, 40))
 
-    while pygame.mixer.music.get_busy():
-        time.sleep(0.1)
+    width, height = pygame.display.get_surface().get_size()
 
-line=Song("/home/dlugbull/Musique/twenty one pilots/Arcane/The Line.mp3")
-play_song(line)
+    sidebar_width = width//4
+    sidebar_rect = pygame.Rect(0, 0, sidebar_width, height)
+    pygame.draw.rect(screen, (20, 20, 20), sidebar_rect)
+    
+    draw_explorer(base)
+
+    pygame.display.flip()
+
+pygame.quit()
+
